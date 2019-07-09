@@ -60,7 +60,10 @@ namespace Minor
 {
 
 /** Forward data betwen Execute and Fetch1 carrying change-of-address/stream
- *  information. */
+ *  information. 
+ *  BranchData代表Execute stage中的branch outcome(分支是否发生)，将该结果最后发送给
+ *  Fetch1和Fetch2。Fetch1用来改变stream(更新stream sequence number和new lines的
+ *  新地址)。Fetch2用来更新branch predictor。*/
 class BranchData /* : public ReportIF, public BubbleIF */
 {
   public:
@@ -169,7 +172,11 @@ std::ostream &operator <<(std::ostream &os, const BranchData &branch);
 /** Line fetch data in the forward direction.  Contains a single cache line
  *  (or fragment of a line), its address, a sequence number assigned when
  *  that line was fetched and a bubbleFlag that can allow ForwardLineData to
- *  be used to represent the absence of line data in a pipeline. */
+ *  be used to represent the absence of line data in a pipeline. 
+ *  将Cache line从Fetch1传递到Fetch2，与MinorDynInsts相似，也有三种类型，bubble，
+ *  fault，一个Cache line(或者是partial line)。
+ *  ForwardLineData所携带的data由Packet所拥有，Packet是从memory中返回的，由memory显式
+ *  的管理。在处理过后由Fetch2删掉packet。*/
 class ForwardLineData /* : public ReportIF, public BubbleIF */
 {
   private:
@@ -251,7 +258,10 @@ const unsigned int MAX_FORWARD_INSTS = 16;
 
 /** Forward flowing data between Fetch2,Decode,Execute carrying a packet of
  *  instructions of a width appropriate to the configured stage widths.
- *  Also carries exception information where instructions are not valid */
+ *  Also carries exception information where instructions are not valid 
+ *  用来记录在Fetch2，Decode，Execute等阶段中流动的指令，存放的instruction数量是width()
+ *  所定义的，指令存放在insts向量中。同时用作Decode和Execute的store input buffer 
+ *  vector。*/
 class ForwardInstData /* : public ReportIF, public BubbleIF */
 {
   public:

@@ -62,11 +62,14 @@ namespace Minor
 
 class MinorDynInst;
 
-/** MinorDynInsts are currently reference counted. */
+/** MinorDynInsts are currently reference counted. 
+ *  使用RefCountingPtr对指令进行计数
+*/
 typedef RefCountingPtr<MinorDynInst> MinorDynInstPtr;
 
 /** Id for lines and instructions.  This includes all the relevant sequence
- *  numbers and thread ids for all stages of execution. */
+ *  numbers and thread ids for all stages of execution. 
+ *  这里的line指的是Cache line*/
 class InstId
 {
   public:
@@ -79,29 +82,40 @@ class InstId
     static const InstSeqNum firstExecSeqNum = 1;
 
   public:
-    /** The thread to which this line/instruction belongs */
+    /** The thread to which this line/instruction belongs 
+     *  该Cache Line/指令所属的线程
+    */
     ThreadID threadId;
 
     /** The 'stream' this instruction belongs to.  Streams are interrupted
      *  (and sequence numbers increased) when Execute finds it wants to
-     *  change the stream of instructions due to a branch. */
+     *  change the stream of instructions due to a branch. 
+     *  该指令所属的stream，当execute stage发现由于分支而更改指令流，当前stream会被
+     *  中断，同时stream sequence number会增加*/
     InstSeqNum streamSeqNum;
 
     /** The predicted qualifier to stream, attached by Fetch2 as a
-     *  consequence of branch prediction */
+     *  consequence of branch prediction 
+     *  prediction sequence number代表branch prediction decision，Fetch2使用
+     *  该number来标记 Cache line/instruction(根据最近一次的分支进行标记)。
+     *  Fetch2可以通知Fetch1需要改变fetch address，同时标记Cache line为新的
+     *  prediction sequence number(只有Fetch1的期望与请求匹配时，才会执行该操作)。*/
     InstSeqNum predictionSeqNum;
 
     /** Line sequence number.  This is the sequence number of the fetched
-     *  line from which this instruction was fetched */
+     *  line from which this instruction was fetched 
+     *  预取的指令所在的Cache Line的sequence number。*/
     InstSeqNum lineSeqNum;
 
     /** Fetch sequence number.  This is 0 for bubbles and an ascending
-     *  sequence for the stream of all fetched instructions */
+     *  sequence for the stream of all fetched instructions 
+     *  当Cache line分解成instruction时，由Fetch2分配的指令预取顺序*/
     InstSeqNum fetchSeqNum;
 
     /** 'Execute' sequence number.  These are assigned after micro-op
      *  decomposition and form an ascending sequence (starting with 1) for
-     *  post-micro-op decomposed instructions. */
+     *  post-micro-op decomposed instructions. 
+     *  当micro-op分解完成后，分配的一个递增的sequence*/
     InstSeqNum execSeqNum;
 
   public:
@@ -142,6 +156,12 @@ class InstId
  *  MinorTrace */
 std::ostream &operator <<(std::ostream &os, const InstId &id);
 
+/** 代表了instruction在pipeline中的执行。 
+ *  一条指令只可能是如下三种东西：
+ *  1)bubble: space-filler
+ *  2)fault: 
+ *  3)decoded instruction: instruction传递到了Fetch2中的decoder，同时被完全解码。
+*/
 class MinorDynInst;
 
 /** Print a short reference to this instruction.  '-' for a bubble and a
@@ -162,6 +182,7 @@ class MinorDynInst : public RefCounted
     static MinorDynInstPtr bubbleInst;
 
   public:
+    /*decoded instruction form*/
     StaticInstPtr staticInst;
 
     InstId id;
@@ -176,14 +197,18 @@ class MinorDynInst : public RefCounted
     Fault fault;
 
     /** Tried to predict the destination of this inst (if a control
-     *  instruction or a sys call) */
+     *  instruction or a sys call) 
+     *  当试图对instruction(主要针对branch instruction)进行预测时，该标志会被set*/
     bool triedToPredict;
 
     /** This instruction was predicted to change control flow and
-     *  the following instructions will have a newer predictionSeqNum */
+     *  the following instructions will have a newer predictionSeqNum 
+     *  当branch instruction预测为taken时，该flag会被set*/
     bool predictedTaken;
 
-    /** Predicted branch target */
+    /** Predicted branch target 
+     *  存放predicted target PC value
+    */
     TheISA::PCState predictedTarget;
 
     /** Fields only set during execution */

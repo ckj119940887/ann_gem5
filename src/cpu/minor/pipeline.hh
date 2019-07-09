@@ -76,12 +76,14 @@ class Pipeline : public Ticked
     /** Allow cycles to be skipped when the pipeline is idle */
     bool allow_idling;
 
+    /** Latches to connect the stages*/
     Latch<ForwardLineData> f1ToF2;
     Latch<BranchData> f2ToF1;
     Latch<ForwardInstData> f2ToD;
     Latch<ForwardInstData> dToE;
     Latch<BranchData> eToF1;
 
+    /** Pipeline stages*/
     Execute execute;
     Decode decode;
     Fetch2 fetch2;
@@ -123,7 +125,8 @@ class Pipeline : public Ticked
     bool isDrained();
 
     /** A custom evaluate allows report in the right place (between
-     *  stages and pipeline advance) */
+     *  stages and pipeline advance) 
+     *  每个cycle(tick)要执行的action*/
     void evaluate() override;
 
     void minorTrace() const;

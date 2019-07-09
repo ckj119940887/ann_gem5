@@ -163,10 +163,14 @@ class Execute : public Named
             drainState(other.drainState)
         { }
 
-        /** In-order instructions either in FUs or the LSQ */
+        /** In-order instructions either in FUs or the LSQ 
+         *  每个要被发射的指令都会push到该队列中。
+        */
         Queue<QueuedInst, ReportTraitsAdaptor<QueuedInst> > *inFlightInsts;
 
-        /** Memory ref instructions still in the FUs */
+        /** Memory ref instructions still in the FUs 
+         *  内存相关的指令被push到该队列中。
+        */
         Queue<QueuedInst, ReportTraitsAdaptor<QueuedInst> > *inFUMemInsts;
 
         /** Index that we've completed upto in getInput data.  We can say we're
@@ -257,7 +261,9 @@ class Execute : public Named
      *  signalled and invoked */
     bool takeInterrupt(ThreadID thread_id, BranchData &branch);
 
-    /** Try and issue instructions from the inputBuffer */
+    /** Try and issue instructions from the inputBuffer 
+     *  唯一对inFlightInsts queue进行push 操作的的process。
+    */
     unsigned int issue(ThreadID thread_id);
 
     /** Try to act on PC-related events.  Returns true if any were
@@ -301,7 +307,8 @@ class Execute : public Named
      *  end of the currect full instruction.
      *  If discard is true then discard all instructions rather than
      *  committing.
-     *  branch is set to any branch raised during commit. */
+     *  branch is set to any branch raised during commit. 
+     *  唯一对inFlightInsts queue进行pop 操作的的process。*/
     void commit(ThreadID thread_id, bool only_commit_microops, bool discard,
         BranchData &branch);
 

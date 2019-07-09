@@ -97,7 +97,9 @@ class Fetch1 : public Named
      *  transfers queue to pass on to Fetch2. */
 
     /** Structure to hold SenderState info through
-     *  translation and memory accesses. */
+     *  translation and memory accesses. 
+     *  代表了I-Cache Line的预取请求，用作Fetch1中的memory request。当访问memory 
+     *  system时，会对Packet::SenderState进行push或pop*/
     class FetchRequest :
         public BaseTLB::Translation, /* For TLB lookups */
         public Packet::SenderState /* For packing into a Packet */
@@ -129,7 +131,10 @@ class Fetch1 : public Named
          * have changed in flight */
         PacketPtr packet;
 
-        /** The underlying request that this fetch represents */
+        /** The underlying request that this fetch represents 
+         *  代表预取访问的请求，如果request到达内存，fault field会被填充为TLB-sourced
+         *  prefetch fault(如果有的话)。
+        */
         RequestPtr request;
 
         /** PC to fixup with line address */
@@ -295,10 +300,14 @@ class Fetch1 : public Named
         NoBubbleTraits<FetchRequestPtr> >
         FetchQueue;
 
-    /** Queue of address translated requests from Fetch1 */
+    /** Queue of address translated requests from Fetch1 
+     *  送到ITLB，调用itb->translateTiming 
+    */
     FetchQueue requests;
 
-    /** Queue of in-memory system requests and responses */
+    /** Queue of in-memory system requests and responses 
+     *  来自与ITLB的响应
+    */
     FetchQueue transfers;
 
     /** Retry state of icache_port */
@@ -348,7 +357,8 @@ class Fetch1 : public Named
 
     /** Try and issue a fetch for a translated request at the
      *  head of the requests queue.  Also tries to move the request
-     *  between queues */
+     *  between queues 
+     *  这里指的两个queues是requests和transfers，以及向memory发送request*/
     void tryToSendToTransfers(FetchRequestPtr request);
 
     /** Try to send (or resend) a memory request's next/only packet to

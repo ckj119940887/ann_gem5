@@ -80,7 +80,8 @@ class MinorCPU : public BaseCPU
 {
   protected:
     /** pipeline is a container for the clockable pipeline stage objects.
-     *  Elements of pipeline call TheISA to implement the model. */
+     *  Elements of pipeline call TheISA to implement the model. 
+     *  在python中对gem5 model进行的配置都会传递到Pipeline中。*/
     Minor::Pipeline *pipeline;
 
     /** An event that wakes up the pipeline when a thread context is

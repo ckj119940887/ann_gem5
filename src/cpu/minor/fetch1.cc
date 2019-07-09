@@ -572,9 +572,9 @@ Fetch1::processResponse(Fetch1::FetchRequestPtr response,
 void
 Fetch1::evaluate()
 {
-    const BranchData &execute_branch = *inp.outputWire;
-    const BranchData &fetch2_branch = *prediction.outputWire;
-    ForwardLineData &line_out = *out.inputWire;
+    const BranchData &execute_branch = *inp.outputWire;         //eToF1
+    const BranchData &fetch2_branch = *prediction.outputWire;   //f2ToF1
+    ForwardLineData &line_out = *out.inputWire;                 //f1ToF2
 
     assert(line_out.isBubble());
 
@@ -588,11 +588,16 @@ Fetch1::evaluate()
         Fetch1ThreadInfo &thread = fetchInfo[execute_branch.threadId];
 
         /* Are we changing stream?  Look to the Execute branches first, then
-         * to predicted changes of stream from Fetch2 */
+         * to predicted changes of stream from Fetch2 
+         * 对Fetch2做出的branch stream change进行优先级区分 */
         if (execute_branch.isStreamChange()) {
             if (thread.state == FetchHalted) {
                 DPRINTF(Fetch, "Halted, ignoring branch: %s\n", execute_branch);
             } else {
+                /** 将branch target更新为 fetchInfo[tid].pc 
+                 *  更新fetchInfo[tid]中的stream sequence number
+                 *  更新fetchInfo[tid]中的prediction sequence number
+                */
                 changeStream(execute_branch);
             }
 
@@ -649,6 +654,11 @@ Fetch1::evaluate()
             DPRINTF(Fetch, "Fetching from thread %d\n", fetch_tid);
 
             /* Generate fetch to selected thread */
+            /** 将fetch memory request 压入到request queue
+             *  同时在transfer queue中为其预留一个slot
+             *  进行ITLB access
+             *  更新PC=PC + 4
+            */
             fetchLine(fetch_tid);
             /* Take up a slot in the fetch queue */
             nextStageReserve[fetch_tid].reserve();
@@ -660,10 +670,14 @@ Fetch1::evaluate()
 
     /* Halting shouldn't prevent fetches in flight from being processed */
     /* Step fetches through the icachePort queues and memory system */
+    /** 如果ICache is not busy，将fetch request发送到ICache中
+     *  如果成功了，将request queue中的request移到transfer queue
+    */
     stepQueues();
 
     /* As we've thrown away early lines, if there is a line, it must
-     *  be from the right stream */
+     *  be from the right stream 
+     *  transfer queue的头部是一个completed fetch request*/
     if (!transfers.empty() &&
         transfers.front()->isComplete())
     {

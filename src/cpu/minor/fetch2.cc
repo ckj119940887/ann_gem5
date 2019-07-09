@@ -240,17 +240,20 @@ void
 Fetch2::evaluate()
 {
     /* Push input onto appropriate input buffer */
+    /* 标记f1ToF2 latch中的data，该data会被push到下个stage的inputBuffer中*/
+    /* f1ToF2 */
     if (!inp.outputWire->isBubble())
         inputBuffer[inp.outputWire->id.threadId].setTail(*inp.outputWire);
 
-    ForwardInstData &insts_out = *out.inputWire;
+    ForwardInstData &insts_out = *out.inputWire;    //f2ToD
     BranchData prediction;
-    BranchData &branch_inp = *branchInp.outputWire;
+    BranchData &branch_inp = *branchInp.outputWire; //eToF1
 
     assert(insts_out.isBubble());
 
     /* React to branches from Execute to update local branch prediction
-     *  structures */
+     *  structures 
+     *  更新分支预测器*/
     updateBranchPrediction(branch_inp);
 
     /* If a branch arrives, don't try and do anything about it.  Only
@@ -268,10 +271,13 @@ Fetch2::evaluate()
     for (ThreadID tid = 0; tid < cpu.numThreads; tid++) {
         Fetch2ThreadInfo &thread = fetchInfo[tid];
 
+        //thread将被block，因为inputBuffer中没有space了
         thread.blocked = !nextStageReserve[tid].canReserve();
 
         const ForwardLineData *line_in = getInput(tid);
 
+        /** 当Fetch2中的预测的sequence number不同于Fetch1中预取的指令，此时将会discard
+         *  与prediction decision不相符的instructions。*/
         while (line_in &&
             thread.expectedStreamSeqNum == line_in->id.streamSeqNum &&
             thread.predictionSeqNum != line_in->id.predictionSeqNum)
@@ -305,7 +311,10 @@ Fetch2::evaluate()
 
         /* Pack instructions into the output while we can.  This may involve
          * using more than one input line.  Note that lineWidth will be 0
-         * for faulting lines */
+         * for faulting lines 
+         * Fetch1向Fetch2发送了一个完整的Cache Line，而不只是Fetch2依赖的inst，具体
+         * decoding inst的数量取决于output width。在hardware中，decoding可以使用多个
+         * decoder，也可以一个decoder使用多次。*/
         while (line_in &&
             (line_in->isFault() ||
                 fetch_info.inputIndex < line_in->lineWidth) && /* More input */
@@ -409,7 +418,8 @@ Fetch2::evaluate()
 
                     /* Note that the decoder can update the given PC.
                      *  Remember not to assign it until *after* calling
-                     *  decode */
+                     *  decode 
+                     *  对指令进行译码*/
                     StaticInstPtr decoded_inst = decoder->decode(fetch_info.pc);
                     dyn_inst->staticInst = decoded_inst;
 

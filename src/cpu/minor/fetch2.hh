@@ -136,7 +136,9 @@ class Fetch2 : public Named
 
         /** PC is currently valid.  Initially false, gets set to true when a
          *  change-of-stream line is received and false again when lines are
-         *  discarded for any reason */
+         *  discarded for any reason 
+         *  一旦stream发生改变后(比如发生了分支预测，导致当前的stream无效，从而需要执行其
+         * 他分支对应的stream)，该值会变为invalid。*/
         bool havePC;
 
         /** Stream sequence number of the last seen line used to identify

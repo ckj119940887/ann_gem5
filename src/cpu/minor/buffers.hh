@@ -282,7 +282,8 @@ class Latch
 /** A pipeline simulating class that will stall (not advance when advance()
  *  is called) if a non-bubble value lies at the far end of the pipeline.
  *  The user can clear the stall before calling advance to unstall the
- *  pipeline. */
+ *  pipeline. 
+ *  Execute stage中所有的Functional unit都是使用该class实现的。*/
 template <typename ElemType,
     typename ReportTraits,
     typename BubbleTraits = BubbleTraitsAdaptor<ElemType> >
@@ -295,7 +296,9 @@ class SelfStallingPipeline : public MinorBuffer<ElemType, ReportTraits>
     typename TimeBuffer<ElemType>::wire popWire;
 
   public:
-    /** If true, advance will not advance the pipeline */
+    /** If true, advance will not advance the pipeline 
+     *  该flag标志当前pipeline stall了，该flag可以被清空。
+    */
     bool stalled;
 
     /** The number of slots with non-bubbles in them */
