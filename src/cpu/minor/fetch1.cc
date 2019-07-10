@@ -589,8 +589,10 @@ Fetch1::evaluate()
 
         /* Are we changing stream?  Look to the Execute branches first, then
          * to predicted changes of stream from Fetch2 
-         * 对Fetch2做出的branch stream change进行优先级区分 */
-        if (execute_branch.isStreamChange()) {
+         * 通过判断来自Execute stage(通过实际的function unit计算出的要执行的branch)和
+         * Fetch2 stage(预测的branch)的信息进行判断，是否需要对stream进行改变，来自
+         * Execute stage的信息优先级最高，来自Fetch2 stage的信息次之。*/
+        if (execute_branch.isStreamChange()) {  //来自Execute stage的信息
             if (thread.state == FetchHalted) {
                 DPRINTF(Fetch, "Halted, ignoring branch: %s\n", execute_branch);
             } else {
@@ -609,6 +611,7 @@ Fetch1::evaluate()
             /* The streamSeqNum tagging in request/response ->req should handle
              *  discarding those requests when we get to them. */
         } else if (thread.state != FetchHalted && fetch2_branch.isStreamChange()) {
+            //来自Fetch2 stage的信息
             /* Handle branch predictions by changing the instruction source
              * if we're still processing the same stream (as set by streamSeqNum)
              * as the one of the prediction.
