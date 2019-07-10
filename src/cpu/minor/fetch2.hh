@@ -152,7 +152,10 @@ class Fetch2 : public Named
         /** Stream sequence number remembered from last time the
          *  predictionSeqNum changed.  Lines should only be discarded when their
          *  predictionSeqNums disagree with Fetch2::predictionSeqNum *and* they
-         *  are from the same stream that bore that prediction number */
+         *  are from the same stream that bore that prediction number 
+         *  记录最近的predictionSeqNum，当expectedStreamSeqNum与predictionSeqNum不
+         *  同的时候，表明分支预测需要改变control flow，此时line会被discard。
+         *  */
         InstSeqNum expectedStreamSeqNum;
 
         /** Fetch2 is the source of prediction sequence numbers.  These
