@@ -167,6 +167,7 @@ Fetch2::updateBranchPrediction(const BranchData &branch)
         break;
       case BranchData::BadlyPredictedBranch:
         /* Predicted taken, not taken */
+        /* branch没有发生。*/
         DPRINTF(Branch, "Branch mis-predicted inst: %s\n", *inst);
         branchPredictor.squash(inst->id.fetchSeqNum,
             branch.target /* Not used */, false, inst->id.threadId);
@@ -197,16 +198,20 @@ Fetch2::predictBranch(MinorDynInstPtr inst, BranchData &branch)
     if (inst->staticInst->isControl() ||
         inst->staticInst->isSyscall())
     {
-        /* Tried to predict */
+        /* Tried to predict 
+           如果要针对instruction进行预测，该标志就会被设置*/
         inst->triedToPredict = true;
 
         DPRINTF(Branch, "Trying to predict for inst: %s\n", *inst);
 
+        //branchPredictor.predict的返回值表示分支是否发生，inst_pc表示预测的PC
         if (branchPredictor.predict(inst->staticInst,
             inst->id.fetchSeqNum, inst_pc,
             inst->id.threadId))
         {
+            //当前分支预测为要发生
             inst->predictedTaken = true;
+            //预测的branch target
             inst->predictedTarget = inst_pc;
             branch.target = inst_pc;
         }
@@ -247,7 +252,7 @@ Fetch2::evaluate()
 
     ForwardInstData &insts_out = *out.inputWire;    //f2ToD
     BranchData prediction;
-    BranchData &branch_inp = *branchInp.outputWire; //eToF1
+    BranchData &branch_inp = *branchInp.outputWire; //eToF2
 
     assert(insts_out.isBubble());
 
@@ -262,6 +267,8 @@ Fetch2::evaluate()
         DPRINTF(Fetch, "Dumping all input as a stream changing branch"
             " has arrived\n");
         dumpAllInput(branch_inp.threadId);
+        /*一旦stream发生改变后(比如发生了分支预测，导致当前的stream无效，从而需要执行其
+         * 他分支对应的stream)，该值会变为invalid。*/
         fetchInfo[branch_inp.threadId].havePC = false;
     }
 
@@ -274,6 +281,7 @@ Fetch2::evaluate()
         //thread将被block，因为inputBuffer中没有space了
         thread.blocked = !nextStageReserve[tid].canReserve();
 
+        //将inputBuffer中的inst取出来
         const ForwardLineData *line_in = getInput(tid);
 
         /** 当Fetch2中的预测的sequence number不同于Fetch1中预取的指令，此时将会discard
@@ -286,7 +294,7 @@ Fetch2::evaluate()
                 " due to predictionSeqNum mismatch (expected: %d)\n",
                 line_in->id, thread.predictionSeqNum);
 
-            popInput(tid);
+            popInput(tid);  //discard当前的inst
             fetchInfo[tid].havePC = false;
 
             if (processMoreThanOneInput) {
@@ -335,6 +343,7 @@ Fetch2::evaluate()
              *  issues */
             bool set_pc = fetch_info.lastStreamSeqNum != line_in->id.streamSeqNum;
 
+            //PC发生了改变，但是没有discard，line是有效的，只是改变了PC
             if (!discard_line && (!fetch_info.havePC || set_pc)) {
                 /* Set the inputIndex to be the MachInst-aligned offset
                  *  from lineBaseAddr of the new PC value */

@@ -63,10 +63,16 @@ namespace Minor
  *  information. 
  *  BranchData代表Execute stage中的branch outcome(分支是否发生)，将该结果最后发送给
  *  Fetch1和Fetch2。Fetch1用来改变stream(更新stream sequence number和new lines的
- *  新地址)。Fetch2用来更新branch predictor。*/
+ *  新地址)。Fetch2用来更新branch predictor。
+ *  BranchData也可以用来代表在Fetch2 stage中做出的branch prediction，该数据也会被从
+ *  Fetch2传递到Fetch1，通知Fetch1改变当前的instruction fetch address。*/
 class BranchData /* : public ReportIF, public BubbleIF */
 {
   public:
+    /**  Reason会被Fetch2 stage和Execute stage修改，通过修改该变量，
+     *   Fetch1(Execute->Fetch1, Fetch2->Fetch1)和Fetch2(Execute->Fetch2)
+     *   根据此变量做出相应的操作。
+    */
     enum Reason
     {
         /* *** No change of stream (information to branch prediction) */

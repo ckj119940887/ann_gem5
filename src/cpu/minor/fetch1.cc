@@ -153,15 +153,19 @@ Fetch1::fetchLine(ThreadID tid)
     /* If line_offset != 0, a request is pushed for the remainder of the
      * line. */
     /* Use a lower, sizeof(MachInst) aligned address for the fetch */
+    /* lineSnap的设置决定了fetch data的size，将其设置为L1 Cache Line的大小，预取的
+       则是一个Cache line，将其设置为一条指令的大小，预取的则是一条指令*/
     Addr aligned_pc = thread.pc.instAddr() & ~((Addr) lineSnap - 1);
     unsigned int line_offset = aligned_pc % lineSnap;
     unsigned int request_size = maxLineWidth - line_offset;
 
-    /* Fill in the line's id */
+    /* Fill in the line's id 
+       为line和instruction分配id。*/
     InstId request_id(tid,
         thread.streamSeqNum, thread.predictionSeqNum,
         lineSeqNum);
 
+    //Fetch1的memory request，即对ICache的预取请求
     FetchRequestPtr request = new FetchRequest(*this, request_id, thread.pc);
 
     DPRINTF(Fetch, "Inserting fetch into the fetch queue "
@@ -169,6 +173,7 @@ Fetch1::fetchLine(ThreadID tid)
         request_id, aligned_pc, thread.pc, line_offset, request_size);
 
     request->request->setContext(cpu.threads[tid]->getTC()->contextId());
+    //为前面分配的Request object建立一个virtual request，即ITLB request。
     request->request->setVirt(0 /* asid */,
         aligned_pc, request_size, Request::INST_FETCH, cpu.instMasterId(),
         /* I've no idea why we need the PC, but give it */
@@ -514,6 +519,7 @@ Fetch1::changeStream(const BranchData &branch)
         thread.state = FetchRunning;
         break;
     }
+    /*新的stream的PC，stream的更新是由于Fetch2和Execute造成的*/
     thread.pc = branch.target;
 }
 
@@ -527,11 +533,13 @@ Fetch1::updateExpectedSeqNums(const BranchData &branch)
         thread.streamSeqNum, branch.newStreamSeqNum,
         thread.predictionSeqNum, branch.newPredictionSeqNum);
 
-    /* Change the stream */
+    /* Change the stream 
+       streamSeqNum是由Execute stage改变的*/
     thread.streamSeqNum = branch.newStreamSeqNum;
     /* Update the prediction.  Note that it's possible for this to
      *  actually set the prediction to an *older* value if new
-     *  predictions have been discarded by execute */
+     *  predictions have been discarded by execute 
+     *  newPredictionSeqNum是由Fetch2 stage改变的*/
     thread.predictionSeqNum = branch.newPredictionSeqNum;
 }
 
