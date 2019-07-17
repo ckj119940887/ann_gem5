@@ -1414,6 +1414,7 @@ Execute::evaluate()
 
     /* Check interrupts first.  Will halt commit if interrupt found */
     bool interrupted = false;
+    //如果执行的是SE mode，则不会有中断；只有在FS mode下才会有中断。
     ThreadID interrupt_tid = checkInterrupts(branch, interrupted);
 
     if (interrupt_tid != InvalidThreadID) {

@@ -138,7 +138,7 @@ Decode::evaluate()
 
     if (tid != InvalidThreadID) {
         DecodeThreadInfo &decode_info = decodeInfo[tid];
-        const ForwardInstData *insts_in = getInput(tid);
+        const ForwardInstData *insts_in = getInput(tid);//直接从inputBuffer中取
 
         unsigned int output_index = 0;
 
@@ -154,7 +154,7 @@ Decode::evaluate()
                 /* Skip */
                 decode_info.inputIndex++;
                 decode_info.inMacroop = false;
-            } else {
+            } else { //真是针对需要micro operation的ISA，比如X86 ISA
                 StaticInstPtr static_inst = inst->staticInst;
                 /* Static inst of a macro-op above the output_inst */
                 StaticInstPtr parent_static_inst = NULL;
@@ -215,7 +215,7 @@ Decode::evaluate()
                         decode_info.inputIndex++;
                         decode_info.inMacroop = false;
                     }
-                } else {
+                } else { //真是针对RISC ISA，比如RISC-V
                     /* Doesn't need decomposing, pass on instruction */
                     DPRINTF(Decode, "Passing on inst: %s inputIndex:"
                         " %d output_index: %d\n",
