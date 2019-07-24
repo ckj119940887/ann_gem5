@@ -154,7 +154,10 @@ Fetch1::fetchLine(ThreadID tid)
      * line. */
     /* Use a lower, sizeof(MachInst) aligned address for the fetch */
     /* lineSnap的设置决定了fetch data的size，将其设置为L1 Cache Line的大小，预取的
-       则是一个Cache line，将其设置为一条指令的大小，预取的则是一条指令*/
+       则是一个Cache line，将其设置为一条指令的大小，预取的则是一条指令。
+       通过打印发现，aligned_pc代表的是一个Cache line(64B)的地址，改地址是虚拟地址。
+       thread.pc.instAddr()是当前要预取的指令地址。
+       lineSnap代表的是预取的基本单位，默认的是64B的Cache line。*/
     Addr aligned_pc = thread.pc.instAddr() & ~((Addr) lineSnap - 1);
     unsigned int line_offset = aligned_pc % lineSnap;
     unsigned int request_size = maxLineWidth - line_offset;
@@ -166,6 +169,7 @@ Fetch1::fetchLine(ThreadID tid)
         lineSeqNum);
 
     //Fetch1的memory request，即对ICache的预取请求
+    //这里thread.pc指的是最近访问的Cache line的虚拟地址
     FetchRequestPtr request = new FetchRequest(*this, request_id, thread.pc);
 
     DPRINTF(Fetch, "Inserting fetch into the fetch queue "
@@ -590,6 +594,7 @@ Fetch1::evaluate()
         fetchInfo[tid].blocked = !nextStageReserve[tid].canReserve();
 
     /** Are both branches from later stages valid and for the same thread? */
+    //当execute_branch和fetch2_branch来自相同的thread时，execute_branch的优先级更高
     if (execute_branch.threadId != InvalidThreadID &&
         execute_branch.threadId == fetch2_branch.threadId) {
 
@@ -706,10 +711,12 @@ Fetch1::evaluate()
         } else {
             DPRINTF(Fetch, "Processing fetched line: %s\n",
                 response->id);
-
+            
+            //将response packet中的指令提取出来放到line_out
             processResponse(response, line_out);
         }
 
+        //将queue中的packet弹出，同时丢弃packet
         popAndDiscard(transfers);
     }
 
