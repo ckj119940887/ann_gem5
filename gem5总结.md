@@ -4,6 +4,27 @@
     然后在对应的source file中增加 #include "debug/ckj.hh"，头文件的名字一定是你增加的
     DebugFlag的名字。
 
+# InstID
+
+## Fetch1
+	InstId::threadId 代表的是thread number，由Fetch1产生。
+	InstId::lineSeqNum 代表的是从Fetch1中取出的Cache line sequence number。
+	
+## Fetch2
+	InstId::predictionSeqNum 代表的是branch prediction decision，Fetch2可以根据
+	最近的branch prediction来标记line和instruction。Fetch2通知Fetch1改变fetch address，
+	同时将line标记为新的prediction sequence number。
+	
+	InstId::fetchSeqNum 代表的是指令的fetch order(将Cache line分解成多个指令)。
+	
+## Decode
+	InstId::execSeqNum 代表的是micro-op 分解后的instruction order。
+
+## Execute
+	InstId::streamSeqNum 代表的是在execute stage选择的stream sequence number，PC的
+	改变会导致streamSeqNum的改变。PC的改变和streamSeqNum的改变都发生在Execute stage中。
+	由于branch和exception造成的。
+
 # Fetch1
 
 ## evaluate()中的重要函数和变量
@@ -40,3 +61,40 @@
     processResponse()将transfers队列中的response转换为ForwardLineData。
     
     adoptPacketData()将packet中的数据取出放到ForwardLineData中。
+
+# Fetch2
+
+## evaluate()中的重要函数和变量
+	首先要判断来自execute stage中有关control flow的相关信息。在判断完这些信息后才
+	会分析来自Fetch1的指令。
+
+### insts_out && branch_inp
+    insts_out代表的是要发送给decode stage的指令。
+    branch_inp代表的是发送给fetch1 stage的分支预测。
+
+### updateBranchPrediction()
+	该函数是针对来execute stage的信息进行判断的。
+
+    对推测执行部件的更新。再该函数中用到了suqash和update(该函数了重写了bpred_unit.hh
+    中的纯虚函数update())两个函数。
+    该函数使用到了bpred_unit.hh和bpred_unit.cc中的分支预测器。这两个文件在
+    (src/cpu/pred)中。
+
+    Minor预测了分支是否发生，以及branch target，一旦这两者中有一个预测错误了就会调用
+    BPredUnit::squash()来撤销所有的分支。具体发生在如下两种场景中：
+    1)在分支执行过后，对ROB中的状态进行了更新，在commit stage检查ROB的更新，同时向fetch
+    stage中发送信号来squash 错误预测的history。
+    2)在decode stage中发现前面的unconditional，PC-relative分支(即间接分支)预测错了，这
+    时候会通知fetch stage进行squash。
+
+    bpred_unit.hh中定义了一个结构体PredictorHistory，其中记录了有关分支预测的相关信息，这
+    些信息可以用来更新BP，BTB，RAS(Return Address Stack，相当于RSB)。比如指令的类型(call，
+    return，indirect branch)，预测的情况(预测是否发生，是否使用RAS)。
+
+# predictBranch()
+	用来对当前的控制指令或系统调用指令(刚从Cache line中取出，并且已经译码结束)进行分支预测。
+	
+	调用了bpred_unit.cc中的predict()函数完成实际的预测工作。其中的uncondBranch()是一个
+	纯虚函数，在不同的分支预测器中其实现不同。
+	在predict()中，先判断分支是否发生(非条件分支一定发生，条件分支要通过对Branch Predictor
+	进行查找，调用lookup())，再判断target(从BTB或RAS中查找target)。

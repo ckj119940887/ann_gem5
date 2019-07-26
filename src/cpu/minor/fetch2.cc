@@ -197,7 +197,7 @@ Fetch2::predictBranch(MinorDynInstPtr inst, BranchData &branch)
     /* Skip non-control/sys call instructions */
     if (inst->staticInst->isControl() ||
         inst->staticInst->isSyscall())
-    {
+    {   //控制指令或系统调用指令
         /* Tried to predict 
            如果要针对instruction进行预测，该标志就会被设置*/
         inst->triedToPredict = true;
@@ -263,6 +263,8 @@ Fetch2::evaluate()
 
     /* If a branch arrives, don't try and do anything about it.  Only
      *  react to your own predictions */
+    //只有在两种情况下不需要改变instruction stream，即没有分支的时候，预测发生分支发生且
+    //确实发生了。
     if (branch_inp.isStreamChange()) {
         DPRINTF(Fetch, "Dumping all input as a stream changing branch"
             " has arrived\n");
@@ -392,7 +394,7 @@ Fetch2::evaluate()
                 dyn_inst->fault = line_in->fault;
                 DPRINTF(Fetch, "Fault being passed output_index: "
                     "%d: %s\n", output_index, dyn_inst->fault->name());
-            } else {
+            } else {    //正常情况，将指令从Cache line中取出并译码
                 uint8_t *line = line_in->line;
 
                 TheISA::MachInst inst_word;
@@ -480,6 +482,7 @@ Fetch2::evaluate()
 
                     /* Predict any branches and issue a branch if
                      *  necessary */
+                    //prediction是BranchData类型的，其中记录了所有的分支的信息
                     predictBranch(dyn_inst, prediction);
                 } else {
                     DPRINTF(Fetch, "Inst not ready yet\n");

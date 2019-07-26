@@ -195,11 +195,12 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
     void *indirect_history = NULL;
 
     if (inst->isUncondCtrl()) {
+        //非条件分支
         DPRINTF(Branch, "[tid:%i]: Unconditional control.\n", tid);
         pred_taken = true;
         // Tell the BP there was an unconditional branch.
         uncondBranch(tid, pc.instAddr(), bp_history);
-    } else {
+    } else { //条件分支
         ++condPredicted;
         pred_taken = lookup(tid, pc.instAddr(), bp_history);
 
@@ -218,7 +219,7 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
                                     bp_history, indirect_history, tid, inst);
 
     // Now lookup in the BTB or RAS.
-    if (pred_taken) {
+    if (pred_taken) { //返回指令
         if (inst->isReturn()) {
             ++usedRAS;
             predict_record.wasReturn = true;
@@ -240,7 +241,7 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
         } else {
             ++BTBLookups;
 
-            if (inst->isCall()) {
+            if (inst->isCall()) { //call指令，所以要向RAS push返回地址
                 RAS[tid].push(pc);
                 predict_record.pushedRAS = true;
 
@@ -254,6 +255,8 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
             }
 
             if (inst->isDirectCtrl() || !useIndirect) {
+                //非间接分支，首先判断BTB中是否有有效的BTB entry，如果没有entry，就需要
+                //对BTB进行更新
                 // Check BTB on direct branches
                 if (BTB.valid(pc.instAddr(), tid)) {
                     ++BTBHits;
@@ -281,7 +284,7 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
                     }
                     TheISA::advancePC(target, inst);
                 }
-            } else {
+            } else { //间接分支
                 predict_record.wasIndirect = true;
                 ++indirectLookups;
                 //Consult indirect predictor on indirect control
@@ -334,11 +337,14 @@ BPredUnit::update(const InstSeqNum &done_sn, ThreadID tid)
     while (!predHist[tid].empty() &&
            predHist[tid].back().seqNum <= done_sn) {
         // Update the branch predictor with the correct results.
-        update(tid, predHist[tid].back().pc,
-                    predHist[tid].back().predTaken,
-                    predHist[tid].back().bpHistory, false,
+        //bpred_unit.hh中有关于该update原型的定义，其原型定义是一个纯虚函数。其实现不在当
+        //前文件中，在TournamentBP, LocalBP, LTAGE, and BiModeBP
+        update(tid, predHist[tid].back().pc, //要更新的指令PC
+                    predHist[tid].back().predTaken, //分值是否发生
+                    predHist[tid].back().bpHistory /*指向branch lookup中state*/, 
+                    false/*在squash中被调用时，该值为true*/,
                     predHist[tid].back().inst,
-                    predHist[tid].back().target);
+                    predHist[tid].back().target/*针对的是squash instruction*/);
 
         iPred.commit(done_sn, tid, predHist[tid].back().indirectHistory);
 
@@ -404,6 +410,7 @@ BPredUnit::squash(const InstSeqNum &squashed_sn,
 
     History &pred_hist = predHist[tid];
 
+    //条件分支预测错误的数量
     ++condIncorrect;
     ppMisses->notify(1);
 
@@ -459,8 +466,13 @@ BPredUnit::squash(const InstSeqNum &squashed_sn,
                 pred_hist.front().indirectHistory, actually_taken);
         }
 
+        //只对三种控制流进行了区分，return，indirect branch，conditional branch。
+        //这两个分支使通过变量actually_taken进行分隔的，第一个分支代表的是预测的分支确实
+        //发生了，但是control flow target是不对的的。第二个分支代表的是预测的分支压根就没
+        //有发生。
         if (actually_taken) {
             if (hist_it->wasReturn && !hist_it->usedRAS) {
+                //当前指令是返回指令，但是没有使用RAS提供的return address
                  DPRINTF(Branch, "[tid: %i] Incorrectly predicted"
                          "  return [sn:%i] PC: %s\n", tid, hist_it->seqNum,
                          hist_it->pc);
