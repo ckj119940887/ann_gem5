@@ -482,7 +482,9 @@ Fetch2::evaluate()
 
                     /* Predict any branches and issue a branch if
                      *  necessary */
-                    //prediction是BranchData类型的，其中记录了所有的分支的信息
+                    //prediction是BranchData类型的，其中记录了所有的分支的信息，该函数
+                    //返回后，如果分支预测为taken，其中prediction中代表的是新的预测的分支
+                    //的相关信息。
                     predictBranch(dyn_inst, prediction);
                 } else {
                     DPRINTF(Fetch, "Inst not ready yet\n");
@@ -529,7 +531,7 @@ Fetch2::evaluate()
             if (!prediction.isBubble() || /* The remains of a
                     line with a prediction in it */
                 line_in->isFault() /* A line which is just a fault */)
-            {
+            {//发生了分支或者出现了fault
                 DPRINTF(Fetch, "Discarding all input on branch/fault\n");
                 dumpAllInput(tid);
                 fetch_info.havePC = false;
