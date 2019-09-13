@@ -55,6 +55,7 @@ class Decoder
 
   protected:
     //The extended machine instruction being generated
+    //这里的ExtMachInst应该指的是64bit指令，而MachInst指的是32bit指令
     ExtMachInst emi;
     bool instDone;
 

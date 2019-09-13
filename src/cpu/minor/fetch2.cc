@@ -265,12 +265,16 @@ Fetch2::evaluate()
      *  react to your own predictions */
     //只有在两种情况下不需要改变instruction stream，即没有分支的时候，预测发生分支发生且
     //确实发生了。
+    //在添加tag时，这里的dumpAllInput不用管，因为在fetch2中的inputBuffer是
+    //ForwardLineData类型的队列，这里dumpAllInput会将队列中所有的LineData清空，因为
+    //stream发生了改变，提前预取的instruction就没有用了
     if (branch_inp.isStreamChange()) {
         DPRINTF(Fetch, "Dumping all input as a stream changing branch"
             " has arrived\n");
         dumpAllInput(branch_inp.threadId);
         /*一旦stream发生改变后(比如发生了分支预测，导致当前的stream无效，从而需要执行其
          * 他分支对应的stream)，该值会变为invalid。*/
+        //havePC用来表示当前的PC是否是有效的，因为stream发生了改变导致pc是无效的了。
         fetchInfo[branch_inp.threadId].havePC = false;
     }
 

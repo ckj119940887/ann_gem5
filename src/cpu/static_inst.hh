@@ -130,8 +130,10 @@ class StaticInst : public RefCounted, public StaticInstFlags
     /// machines with vector and predicate register files.
     //@{
     /// Number of source registers.
+    //当前指令中source register的个数
     int8_t numSrcRegs()  const { return _numSrcRegs; }
     /// Number of destination registers.
+    //当前指令中destination register的个数
     int8_t numDestRegs() const { return _numDestRegs; }
     /// Number of floating-point destination regs.
     int8_t numFPDestRegs()  const { return _numFPDestRegs; }

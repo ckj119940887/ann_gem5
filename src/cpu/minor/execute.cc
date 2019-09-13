@@ -381,6 +381,7 @@ Execute::handleMemResponse(MinorDynInstPtr inst,
         }
 
         /* Complete the memory access instruction */
+        //完成memory access
         fault = inst->staticInst->completeAcc(packet, &context,
             inst->traceData);
 
@@ -471,6 +472,7 @@ Execute::executeMemRefInst(MinorDynInstPtr inst, BranchData &branch,
 
         DPRINTF(MinorExecute, "Initiating memRef inst: %s\n", *inst);
 
+        //初始化memory access，用来计算effective address
         Fault init_fault = inst->staticInst->initiateAcc(&context,
             inst->traceData);
 
@@ -528,6 +530,10 @@ cyclicIndexDec(unsigned int index, unsigned int cycle_size)
     return ret;
 }
 
+/*
+  所有要发生的指令都会放到inFlightInsts，包括memory instruction。
+  但是对于memory instruction，也会放到inFUMemInsts中。
+*/
 unsigned int
 Execute::issue(ThreadID thread_id)
 {
@@ -539,6 +545,7 @@ Execute::issue(ThreadID thread_id)
         return 0;
 
     /* Start from the first FU */
+    // Execute stage中function unit的编号
     unsigned int fu_index = 0;
 
     /* Remains true while instructions are still being issued.  If any
@@ -600,9 +607,18 @@ Execute::issue(ThreadID thread_id)
                  *  needed to execute this instruction?  Faults can always
                  *  issue to any FU but probably should just 'live' in the
                  *  inFlightInsts queue rather than having an FU. */
+                /*如果当前要发射到function unit的指令不是instruction，而是一个fault，
+                  那么此时将直接发射到该FU中，其实fault并不会占有FU，只是在inFlightInsts
+                  中占了一个位置。
+
+                  相反，如果确实是一条指令，那么此时会首先检查当前FU是否可以用来处理当前的指
+                  令，因为没给FU有各自的功能，有自己支持的instruction class。
+                */
+                //该变量用来表明当前FU是否可以处理当前的instruction
                 bool fu_is_capable = (!inst->isFault() ?
                     fu->provides(inst->staticInst->opClass()) : true);
 
+                //Is this an instruction that can be executed `for free' and needn't spend time in an FU.
                 if (inst->isNoCostInst()) {
                     /* Issue free insts. to a fake numbered FU */
                     fu_index = noCostFUIndex;
@@ -623,12 +639,14 @@ Execute::issue(ThreadID thread_id)
 
                     /* Push the instruction onto the inFlight queue so
                      *  it can be committed in order */
+                    //对于这种NoCostInst可以直接commit
                     QueuedInst fu_inst(inst);
                     thread.inFlightInsts->push(fu_inst);
 
                     issued = true;
 
-                } else if (!fu_is_capable || fu->alreadyPushed()) {
+                } else if (!fu_is_capable || fu->alreadyPushed()) { 
+                    //当前FU无法处理该指令或者instruction已经进入该FU，但是还没有advance(即处于busy状态)
                     /* Skip */
                     if (!fu_is_capable) {
                         DPRINTF(MinorExecute, "Can't issue as FU: %d isn't"
@@ -641,7 +659,7 @@ Execute::issue(ThreadID thread_id)
                     DPRINTF(MinorExecute, "Can't issue inst: %s into FU: %d,"
                         " it's stalled\n",
                         *inst, fu_index);
-                } else if (!fu->canInsert()) {
+                } else if (!fu->canInsert()) {  //指令现在不能被发射
                     DPRINTF(MinorExecute, "Can't issue inst: %s to busy FU"
                         " for another: %d cycles\n",
                         *inst, fu->cyclesBeforeInsert());
@@ -653,6 +671,7 @@ Execute::issue(ThreadID thread_id)
                         (timing ? &(timing->srcRegsRelativeLats)
                             : NULL);
 
+                    //FUs which this pipeline can't receive a forwarded
                     const std::vector<bool> *cant_forward_from_fu_indices =
                         &(fu->cantForwardFromFUIndices);
 
@@ -693,7 +712,7 @@ Execute::issue(ThreadID thread_id)
 
                         /* Decorate the inst with FU details */
                         inst->fuIndex = fu_index;
-                        inst->extraCommitDelay = extra_dest_retire_lat;
+                        inst->extraCommitDelay = extra_dest_retire_lat; //Extra delay at the end of the pipeline.
                         inst->extraCommitDelayExpr =
                             extra_dest_retire_lat_expr;
 
@@ -701,11 +720,15 @@ Execute::issue(ThreadID thread_id)
                             /* Remember which instruction this memory op
                              *  depends on so that initiateAcc can be called
                              *  early */
+                            //在到达in flight insts queue头部之前，就可以提前离开FU(相关的依赖已经满足)
                             if (allowEarlyMemIssue) {
+                                //记录当前访存指令所依赖的指令的execSeqNum，可以用作对dependency ordering的
+                                //完整性检查，有点类似于轻量级的乱序执行，特别是initiateAcc for memory ops
                                 inst->instToWaitFor =
-                                    scoreboard[thread_id].execSeqNumToWaitFor(inst,
-                                        cpu.getContext(thread_id));
+                                    scoreboard[thread_id].execSeqNumToWaitFor(inst, //Returns the exec sequence number of the most recent inst on which the given inst depends.
+                                        cpu.getContext(thread_id));                 //在dependent inst能够调用initiateACC之前用来决定哪条inst可以被提交，     
 
+                                //getLastMemBarrier获得last issued memory barrier的execSeqNum
                                 if (lsq.getLastMemBarrier(thread_id) >
                                     inst->instToWaitFor)
                                 {
@@ -730,6 +753,7 @@ Execute::issue(ThreadID thread_id)
                              *  queue to ensure in-order issue to the LSQ */
                             DPRINTF(MinorExecute, "Pushing mem inst: %s\n",
                                 *inst);
+                            //专门用作memory instruction的queue
                             thread.inFUMemInsts->push(fu_inst);
                         }
 
@@ -1097,6 +1121,7 @@ Execute::commit(ThreadID thread_id, bool only_commit_microops, bool discard,
             !(only_commit_microops && ex_info.lastCommitWasEndOfMacroop);
 
         /* Can we find a mem response for this inst */
+        // inLSQ,指令在LSQ中，没有在function unit
         LSQ::LSQRequestPtr mem_response =
             (inst->inLSQ ? lsq.findResponse(inst) : NULL);
 
@@ -1104,10 +1129,12 @@ Execute::commit(ThreadID thread_id, bool only_commit_microops, bool discard,
             can_commit_insts);
 
         /* Test for PC events after every instruction */
+        //tryPCEvents，对PC相关的事件进行相应的操作
         if (isInbetweenInsts(thread_id) && tryPCEvents(thread_id)) {
             ThreadContext *thread = cpu.getContext(thread_id);
 
             /* Branch as there was a change in PC */
+            //发生了PC相关的事件，用来指导fetch1和fetch2更改stream
             updateBranchData(thread_id, BranchData::UnpredictedBranch,
                 MinorDynInst::bubble(), thread->pcState(), branch);
         } else if (mem_response &&
@@ -1126,8 +1153,11 @@ Execute::commit(ThreadID thread_id, bool only_commit_microops, bool discard,
                     " stream state was unexpected, expected: %d\n",
                     *inst, ex_info.streamSeqNum);
 
+                //当前memory instruction要被discard
+                //popResponse用来进行完整性检查，同时pop head response
                 lsq.popResponse(mem_response);
             } else {
+                //处理从内存队列中提取mem ref响应并完成相关指令。
                 handleMemResponse(inst, mem_response, branch, fault);
                 committed_inst = true;
             }
@@ -1150,6 +1180,7 @@ Execute::commit(ThreadID thread_id, bool only_commit_microops, bool discard,
              *  For any other case, leave it to the normal instruction
              *  issue below to handle them.
              */
+            //canRequest(),request queue中是否有space能够push一个request(通过发射一条memory instruction)
             if (!ex_info.inFUMemInsts->empty() && lsq.canRequest()) {
                 DPRINTF(MinorExecute, "Trying to commit from mem FUs\n");
 
@@ -1187,7 +1218,7 @@ Execute::commit(ThreadID thread_id, bool only_commit_microops, bool discard,
 
             /* Try to issue from the ends of FUs and the inFlightInsts
              *  queue */
-            if (!completed_inst && !inst->inLSQ) {
+            if (!completed_inst && !inst->inLSQ) {  //非memory instruction的普通指令
                 DPRINTF(MinorExecute, "Trying to commit from FUs\n");
 
                 /* Try to commit from a functional unit */
@@ -1215,6 +1246,7 @@ Execute::commit(ThreadID thread_id, bool only_commit_microops, bool discard,
                 }
             }
 
+            //准备提交
             if (try_to_commit) {
                 discard_inst = inst->id.streamSeqNum !=
                     ex_info.streamSeqNum || discard;
@@ -1266,6 +1298,7 @@ Execute::commit(ThreadID thread_id, bool only_commit_microops, bool discard,
                             inst->id.execSeqNum &&
                         lsq.getLastMemBarrier(thread_id) != 0)
                     {
+                        //当前memory instruction无法被commit
                         DPRINTF(MinorExecute, "Not committing inst: %s yet"
                             " as there are incomplete barriers in flight\n",
                             *inst);
@@ -1285,6 +1318,7 @@ Execute::commit(ThreadID thread_id, bool only_commit_microops, bool discard,
                     completed_inst = true;
                 }
 
+                //function unit可以继续执行指令了
                 if (completed_inst) {
                     /* Allow the pipeline to advance.  If the FU head
                      *  instruction wasn't the inFlightInsts head
@@ -1323,16 +1357,21 @@ Execute::commit(ThreadID thread_id, bool only_commit_microops, bool discard,
 
         /* Pop issued (to LSQ) and discarded mem refs from the inFUMemInsts
          *  as they've *definitely* exited the FUs */
+        //completed_inst是由commitInst()修改的，该函数负责计算memory address，一旦该
+        //地址计算完后，completed_inst被标记为true，此时可以将inFUMemInsts中的memory 
+        //instruction弹出，然后发射到LSQ中
         if (completed_inst && inst->isMemRef()) {
             /* The MemRef could have been discarded from the FU or the memory
              *  queue, so just check an FU instruction */
             if (!ex_info.inFUMemInsts->empty() &&
                 ex_info.inFUMemInsts->front().inst == inst)
             {
+                //离开FU后，就会被从inFUMemInsts队列中踢出
                 ex_info.inFUMemInsts->pop();
             }
         }
 
+        //针对非内存指令
         if (completed_inst && !(issued_mem_ref && fault == NoFault)) {
             /* Note that this includes discarded insts */
             DPRINTF(MinorExecute, "Completed inst: %s\n", *inst);
